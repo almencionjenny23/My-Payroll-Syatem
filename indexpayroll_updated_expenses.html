@@ -1,0 +1,1052 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Personal Payroll Dashboard</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Inter Font -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                    },
+                    colors: {
+                        brand: {
+                            50: '#f0fdf4',
+                            100: '#dcfce7',
+                            500: '#22c55e',
+                            600: '#16a34a',
+                            700: '#15803d',
+                            800: '#166534',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        @media print {
+            .no-print { display: none !important; }
+            .print-only { display: block !important; }
+            body { background: white !important; color: black !important; }
+            .print-card { border: none !important; shadow: none !important; padding: 0 !important; }
+        }
+    </style>
+</head>
+<body class="bg-slate-100 text-slate-800 min-h-screen flex flex-col">
+
+    <!-- Toast Notification Container -->
+    <div id="toast-container" class="fixed top-5 right-5 z-50 flex flex-col gap-2 pointer-events-none no-print"></div>
+
+    <!-- Edit Status Banner -->
+    <div id="edit-mode-banner" class="hidden bg-amber-500 text-white px-4 py-2 text-sm font-semibold shadow-md flex items-center justify-between no-print sticky top-0 z-40">
+        <div class="flex items-center gap-2">
+            <i class="fa-solid fa-pen-to-square text-lg"></i>
+            <span id="edit-mode-text">Editing Saved Payroll Record #[ID]</span>
+        </div>
+        <button onclick="cancelEditing()" class="bg-amber-700 hover:bg-amber-800 px-3 py-1 rounded text-xs transition font-medium flex items-center gap-1">
+            <i class="fa-solid fa-xmark"></i> Cancel Editing (New Entry)
+        </button>
+    </div>
+
+    <!-- Header Section -->
+    <header class="bg-slate-900 text-white py-4 px-6 shadow-lg no-print">
+        <div class="max-w-7xl mx-auto flex flex-col sm:flex-row justify-between items-center gap-4">
+            <div class="flex items-center gap-3">
+                <div class="bg-brand-500 p-2.5 rounded-xl text-slate-900">
+                    <i class="fa-solid fa-calculator text-xl"></i>
+                </div>
+                <div>
+                    <h1 class="text-xl font-bold tracking-tight">Payroll Manager Pro</h1>
+                    <p class="text-xs text-slate-400">Semi-Monthly Personal Calculation & History Log</p>
+                </div>
+            </div>
+            
+            <div class="flex items-center gap-2 flex-wrap">
+                <button onclick="saveCurrentPayroll()" class="bg-brand-600 hover:bg-brand-500 text-white font-semibold px-4 py-2 rounded-lg shadow transition flex items-center gap-2 text-sm">
+                    <i class="fa-solid fa-floppy-disk"></i>
+                    <span id="save-btn-text">Save Payroll Record</span>
+                </button>
+                <button onclick="resetForm()" class="bg-slate-800 hover:bg-slate-700 text-slate-300 font-medium px-3 py-2 rounded-lg transition text-sm flex items-center gap-1.5" title="Reset fields to default">
+                    <i class="fa-solid fa-rotate-right"></i>
+                    <span>Reset</span>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="max-w-7xl mx-auto p-4 sm:p-6 w-full flex-grow space-y-6">
+
+        <!-- Controls & Pay Period Toolbar -->
+        <div class="bg-white rounded-xl p-5 shadow-sm border border-slate-200 no-print">
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <div>
+                    <label class="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Employee Name</label>
+                    <input type="text" id="emp-name" value="John Doe" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-brand-500 focus:outline-none">
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Select Year & Month</label>
+                    <input type="month" id="pay-month" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-brand-500 focus:outline-none">
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Salary Cut-off Period</label>
+                    <select id="cutoff-period" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-brand-500 focus:outline-none" onchange="updateOtRulesInfo(); calculatePayroll();">
+                        <option value="1">1st Cut-off (1st - 15th)</option>
+                        <option value="2">2nd Cut-off (16th - End of Month)</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Daily Rate (₱)</label>
+                    <div class="relative">
+                        <span class="absolute left-3 top-2 text-slate-400 text-sm">₱</span>
+                        <input type="number" id="daily-rate" value="695" min="0" step="0.01" class="w-full border border-slate-300 rounded-lg pl-7 pr-3 py-2 text-sm focus:ring-2 focus:ring-brand-500 focus:outline-none font-medium" oninput="calculatePayroll()">
+                    </div>
+                </div>
+            </div>
+
+            <!-- Info Alert for Offset Rules -->
+            <div id="ot-range-info" class="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg text-xs text-blue-800 flex items-start gap-2">
+                <i class="fa-solid fa-circle-info text-blue-500 mt-0.5 text-sm"></i>
+                <div id="ot-range-text">Loading overtime rules window...</div>
+            </div>
+        </div>
+
+        <!-- Inputs Grid -->
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 no-print">
+
+            <!-- Card 1: Attendance & Base Pay -->
+            <div class="bg-white rounded-xl p-5 shadow-sm border border-slate-200 flex flex-col justify-between">
+                <div>
+                    <div class="flex items-center gap-2 border-b border-slate-100 pb-3 mb-4">
+                        <i class="fa-regular fa-calendar-check text-brand-600"></i>
+                        <h2 class="font-bold text-slate-800">1. Attendance & Base Pay</h2>
+                    </div>
+
+                    <div class="space-y-4">
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-600 mb-1">Days Worked in Period</label>
+                            <input type="number" id="days-worked" value="12" min="0" max="16" step="0.5" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-brand-500 focus:outline-none" oninput="calculatePayroll()">
+                            <p class="text-[11px] text-slate-400 mt-1">Standard full semi-monthly shift is 10-13 days.</p>
+                        </div>
+
+                        <div class="p-3 bg-slate-50 rounded-lg border border-slate-100">
+                            <span class="text-xs text-slate-500 font-medium">Hourly Rate Equivalent</span>
+                            <div class="text-lg font-bold text-slate-700" id="hourly-rate-display">₱86.88 / hr</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="mt-6 pt-4 border-t border-slate-100 flex justify-between items-center">
+                    <span class="text-xs font-bold text-slate-500 uppercase">Base Pay Total</span>
+                    <span class="text-lg font-extrabold text-slate-800" id="base-pay-display">₱8,340.00</span>
+                </div>
+            </div>
+
+            <!-- Card 2: Overtime Entry Log -->
+            <div class="bg-white rounded-xl p-5 shadow-sm border border-slate-200 lg:col-span-2 flex flex-col justify-between">
+                <div>
+                    <div class="flex items-center justify-between border-b border-slate-100 pb-3 mb-4">
+                        <div class="flex items-center gap-2">
+                            <i class="fa-solid fa-clock text-amber-500"></i>
+                            <h2 class="font-bold text-slate-800">2. Overtime Logs (1.25x Rate)</h2>
+                        </div>
+                        <button onclick="addOtRow()" class="text-xs bg-amber-50 hover:bg-amber-100 text-amber-700 font-semibold px-2.5 py-1.5 rounded-lg transition border border-amber-200 flex items-center gap-1">
+                            <i class="fa-solid fa-plus"></i> Add OT Shift
+                        </button>
+                    </div>
+
+                    <!-- OT Items Container -->
+                    <div class="space-y-3 max-h-60 overflow-y-auto pr-1" id="ot-rows-container">
+                        <!-- Dynamic OT Rows Inserted Here -->
+                    </div>
+                </div>
+
+                <div class="mt-6 pt-4 border-t border-slate-100 flex flex-wrap justify-between items-center gap-2">
+                    <div class="text-xs text-slate-500">
+                        Meal Allowance Trigger: <span class="font-semibold text-slate-700">+₱30</span> per shift extending/reaching 8:00 PM (20:00).
+                    </div>
+                    <div class="text-right">
+                        <span class="text-xs font-bold text-slate-500 uppercase block">Total OT & Meal Allowance</span>
+                        <span class="text-lg font-extrabold text-amber-600" id="total-ot-display">₱0.00</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Card 3: Other Income / Additional Pay -->
+            <div class="bg-white rounded-xl p-5 shadow-sm border border-slate-200">
+                <div class="flex items-center justify-between border-b border-slate-100 pb-3 mb-4">
+                    <div class="flex items-center gap-2">
+                        <i class="fa-solid fa-hand-holding-dollar text-emerald-600"></i>
+                        <h2 class="font-bold text-slate-800">3. Additional Income</h2>
+                    </div>
+                    <button onclick="addIncomeRow()" class="text-xs bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-semibold px-2.5 py-1.5 rounded-lg transition border border-emerald-200 flex items-center gap-1">
+                        <i class="fa-solid fa-plus"></i> Add Item
+                    </button>
+                </div>
+
+                <div class="space-y-3 max-h-48 overflow-y-auto pr-1" id="income-rows-container">
+                    <!-- Dynamic Income Rows -->
+                </div>
+
+                <div class="mt-6 pt-4 border-t border-slate-100 flex justify-between items-center">
+                    <span class="text-xs font-bold text-slate-500 uppercase">Other Income Total</span>
+                    <span class="text-lg font-extrabold text-emerald-600" id="total-income-display">₱0.00</span>
+                </div>
+            </div>
+
+            <!-- Card 4: Standard & Custom Deductions -->
+            <div class="bg-white rounded-xl p-5 shadow-sm border border-slate-200 lg:col-span-2">
+                <div class="flex items-center justify-between border-b border-slate-100 pb-3 mb-4">
+                    <div class="flex items-center gap-2">
+                        <i class="fa-solid fa-receipt text-rose-500"></i>
+                        <h2 class="font-bold text-slate-800">4. Deductions Breakdown</h2>
+                    </div>
+                    <button onclick="addDeductionRow()" class="text-xs bg-rose-50 hover:bg-rose-100 text-rose-700 font-semibold px-2.5 py-1.5 rounded-lg transition border border-rose-200 flex items-center gap-1">
+                        <i class="fa-solid fa-plus"></i> Add Custom Deduction
+                    </button>
+                </div>
+
+                <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 mb-4">
+                    <div>
+                        <label class="block text-xs font-medium text-slate-600 mb-1">SSS</label>
+                        <div class="relative">
+                            <span class="absolute left-2.5 top-2 text-slate-400 text-xs">₱</span>
+                            <input type="number" id="ded-sss" value="0" min="0" step="0.01" class="w-full border border-slate-300 rounded-lg pl-6 pr-2 py-1.5 text-xs focus:ring-2 focus:ring-brand-500 focus:outline-none" oninput="calculatePayroll()">
+                        </div>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-medium text-slate-600 mb-1">PhilHealth</label>
+                        <div class="relative">
+                            <span class="absolute left-2.5 top-2 text-slate-400 text-xs">₱</span>
+                            <input type="number" id="ded-philhealth" value="0" min="0" step="0.01" class="w-full border border-slate-300 rounded-lg pl-6 pr-2 py-1.5 text-xs focus:ring-2 focus:ring-brand-500 focus:outline-none" oninput="calculatePayroll()">
+                        </div>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-medium text-slate-600 mb-1">Pag-IBIG</label>
+                        <div class="relative">
+                            <span class="absolute left-2.5 top-2 text-slate-400 text-xs">₱</span>
+                            <input type="number" id="ded-pagibig" value="0" min="0" step="0.01" class="w-full border border-slate-300 rounded-lg pl-6 pr-2 py-1.5 text-xs focus:ring-2 focus:ring-brand-500 focus:outline-none" oninput="calculatePayroll()">
+                        </div>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-medium text-slate-600 mb-1">Withholding Tax</label>
+                        <div class="relative">
+                            <span class="absolute left-2.5 top-2 text-slate-400 text-xs">₱</span>
+                            <input type="number" id="ded-tax" value="0" min="0" step="0.01" class="w-full border border-slate-300 rounded-lg pl-6 pr-2 py-1.5 text-xs focus:ring-2 focus:ring-brand-500 focus:outline-none" oninput="calculatePayroll()">
+                        </div>
+                    </div>
+                </div>
+
+                <div class="space-y-3 border-t border-slate-100 pt-3" id="deduction-rows-container">
+                    <!-- Dynamic Deduction Rows -->
+                </div>
+
+                <div class="mt-4 pt-3 border-t border-slate-100 flex justify-between items-center">
+                    <span class="text-xs font-bold text-slate-500 uppercase">Total Deductions</span>
+                    <span class="text-lg font-extrabold text-rose-600" id="total-deductions-display">₱0.00</span>
+                </div>
+            </div>
+
+            <!-- Card 5: Expenses -->
+            <div class="bg-white rounded-xl p-5 shadow-sm border border-slate-200 lg:col-span-3">
+                <div class="flex items-center justify-between border-b border-slate-100 pb-3 mb-4">
+                    <div class="flex items-center gap-2"><i class="fa-solid fa-wallet text-orange-500"></i><h2 class="font-bold text-slate-800">5. Expenses</h2></div>
+                    <button onclick="addExpenseRow()" class="text-xs bg-orange-50 hover:bg-orange-100 text-orange-700 font-semibold px-2.5 py-1.5 rounded-lg border border-orange-200"><i class="fa-solid fa-plus"></i> Add Expense</button>
+                </div>
+                <div class="space-y-3" id="expense-rows-container"></div>
+                <div class="mt-4 pt-3 border-t border-slate-100 flex justify-between items-center"><span class="text-xs font-bold text-slate-500 uppercase">Total Expenses</span><span class="text-lg font-extrabold text-orange-600" id="total-expenses-display">₱0.00</span></div>
+            </div>
+
+        </div>
+
+        <!-- Summary & Computed Net Pay Banner -->
+        <div class="bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 text-white rounded-xl p-6 shadow-xl flex flex-col md:flex-row justify-between items-center gap-6 no-print">
+            <div class="space-y-1 text-center md:text-left">
+                <span class="text-xs font-semibold text-brand-400 uppercase tracking-wider">Payroll Calculation Live Summary</span>
+                <h3 class="text-lg font-semibold text-slate-200" id="summary-period-title">--</h3>
+                <p class="text-xs text-slate-400">Includes Gross Pay (Base + OT + Allowances + Bonus) minus Deductions</p>
+            </div>
+            
+            <div class="flex items-center gap-6 bg-slate-800/80 p-4 rounded-xl border border-slate-700/50">
+                <div class="text-right">
+                    <span class="block text-xs text-slate-400 font-medium">ESTIMATED NET TAKE-HOME</span>
+                    <span class="text-3xl font-black text-brand-400" id="net-pay-display">₱0.00</span>
+                </div>
+                <button onclick="saveCurrentPayroll()" class="bg-brand-600 hover:bg-brand-500 text-slate-900 font-bold px-4 py-3 rounded-lg shadow-lg transition flex items-center gap-2">
+                    <i class="fa-solid fa-check"></i>
+                    <span id="summary-save-btn">Save Record</span>
+                </button>
+            </div>
+        </div>
+
+        <!-- Payslip Document View (Print / Previewable) -->
+        <div id="payslip-preview" class="bg-white rounded-xl p-8 shadow-sm border border-slate-200 print-card">
+            <div class="flex justify-between items-start border-b border-slate-200 pb-4 mb-6">
+                <div>
+                    <h2 class="text-2xl font-black text-slate-900 tracking-tight">PAYSLIP STATEMENT</h2>
+                    <p class="text-xs text-slate-500 mt-0.5" id="ps-emp-name">Employee: John Doe</p>
+                </div>
+                <div class="text-right">
+                    <span class="inline-block bg-slate-100 text-slate-800 text-xs font-bold px-3 py-1 rounded-full border border-slate-200 mb-1" id="ps-period-tag">Period</span>
+                    <p class="text-xs text-slate-400" id="ps-generated-date">Issued: --</p>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-8 text-sm">
+                <!-- Earnings Column -->
+                <div>
+                    <h3 class="font-bold text-xs uppercase tracking-wider text-slate-400 border-b border-slate-200 pb-2 mb-3">Earnings & Allowances</h3>
+                    <div class="space-y-2">
+                        <div class="flex justify-between text-slate-700">
+                            <span>Base Salary (<span id="ps-days">0</span> days @ ₱<span id="ps-daily-rate">0</span>)</span>
+                            <span class="font-semibold" id="ps-base-pay">₱0.00</span>
+                        </div>
+                        <div class="flex justify-between text-slate-700">
+                            <span>Overtime Pay & Meal Bonuses</span>
+                            <span class="font-semibold" id="ps-ot-pay">₱0.00</span>
+                        </div>
+                        <div id="ps-income-list" class="space-y-1">
+                            <!-- Dynamic items -->
+                        </div>
+                        <div class="flex justify-between font-bold text-slate-900 pt-2 border-t border-slate-100">
+                            <span>GROSS EARNINGS</span>
+                            <span id="ps-gross-pay">₱0.00</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Deductions Column -->
+                <div>
+                    <h3 class="font-bold text-xs uppercase tracking-wider text-slate-400 border-b border-slate-200 pb-2 mb-3">Deductions</h3>
+                    <div id="ps-deductions-list" class="space-y-2 text-slate-700">
+                        <!-- Dynamic items -->
+                    </div>
+                    <div id="ps-expenses-list" class="space-y-2 text-slate-700 mt-3 pt-3 border-t border-slate-100"></div>
+                    <div class="flex justify-between font-bold text-slate-900 pt-2 border-t border-slate-100 mt-2">
+                        <span>TOTAL DEDUCTIONS + EXPENSES</span>
+                        <span id="ps-total-deductions" class="text-rose-600">₱0.00</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Net Pay Box -->
+            <div class="mt-8 pt-4 border-t-2 border-slate-900 flex justify-between items-center bg-slate-50 p-4 rounded-lg">
+                <div>
+                    <span class="block text-xs font-bold text-slate-500 uppercase">Total Net Payment</span>
+                    <span class="text-xs text-slate-400">Direct Deposit / Cash</span>
+                </div>
+                <span class="text-2xl font-black text-slate-900" id="ps-net-pay">₱0.00</span>
+            </div>
+
+            <div class="mt-6 flex justify-end gap-2 no-print">
+                <button onclick="window.print()" class="bg-slate-800 hover:bg-slate-700 text-white text-xs font-semibold px-4 py-2 rounded-lg transition flex items-center gap-1.5">
+                    <i class="fa-solid fa-print"></i> Print Payslip / Save PDF
+                </button>
+            </div>
+        </div>
+
+        <!-- Saved Payroll Logs Section -->
+        <div class="bg-white rounded-xl p-6 shadow-sm border border-slate-200 no-print space-y-4">
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-100 pb-4">
+                <div>
+                    <h2 class="text-lg font-bold text-slate-800 flex items-center gap-2">
+                        <i class="fa-solid fa-history text-brand-600"></i> Saved Payroll Logs & History
+                    </h2>
+                    <p class="text-xs text-slate-500">View, Edit, or Print previously recorded payroll calculations</p>
+                </div>
+                <div class="text-xs text-slate-500">
+                    Total Records: <span id="record-count" class="font-bold text-slate-800">0</span>
+                </div>
+            </div>
+
+            <!-- Log Table -->
+            <div class="overflow-x-auto">
+                <table class="w-full text-left border-collapse text-sm">
+                    <thead>
+                        <tr class="bg-slate-50 border-b border-slate-200 text-xs font-semibold text-slate-500 uppercase tracking-wider">
+                            <th class="p-3">Period</th>
+                            <th class="p-3">Employee</th>
+                            <th class="p-3">Days</th>
+                            <th class="p-3">Gross Pay</th>
+                            <th class="p-3">Deductions</th>
+                            <th class="p-3">Net Pay</th>
+                            <th class="p-3 text-center">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="payroll-logs-body" class="divide-y divide-slate-100">
+                        <!-- Dynamic Records -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+    </main>
+
+    <!-- Footer -->
+    <footer class="bg-white border-t border-slate-200 py-4 px-6 text-center text-xs text-slate-500 no-print">
+        Personal Semi-Monthly Payroll System &bull; Local Storage Secured &bull; Free Utility
+    </footer>
+
+    <!-- JavaScript Logic -->
+    <script>
+        // State variables
+        let editingRecordId = null; // Stores record ID when in Edit Mode
+        let otRowCounter = 0;
+        let incomeRowCounter = 0;
+        let deductionRowCounter = 0;
+        let expenseRowCounter = 0;
+
+        // Initialize App on Load
+        window.onload = function() {
+            // Set current month to input
+            const now = new Date();
+            const year = now.getFullYear();
+            const month = String(now.getMonth() + 1).padStart(2, '0');
+            document.getElementById('pay-month').value = `${year}-${month}`;
+
+            // Add default initial dynamic rows
+            addOtRow();
+            addIncomeRow('Meal Allowance (Fixed)', 0);
+            addExpenseRow();
+
+            // Update info labels & calculate
+            updateOtRulesInfo();
+            calculatePayroll();
+            renderSavedLogs();
+        };
+
+        // Helper to format currency
+        function fmt(num) {
+            return '₱' + (parseFloat(num) || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        }
+
+        // Display Toast Feedback
+        function showToast(message, type = 'success') {
+            const container = document.getElementById('toast-container');
+            const toast = document.createElement('div');
+            
+            const bgColor = type === 'success' ? 'bg-slate-900 text-emerald-400 border-emerald-500' : 'bg-slate-900 text-amber-400 border-amber-500';
+            const icon = type === 'success' ? 'fa-circle-check text-emerald-400' : 'fa-circle-info text-amber-400';
+
+            toast.className = `pointer-events-auto flex items-center gap-3 px-4 py-3 rounded-xl shadow-2xl border text-sm font-medium transition-all duration-300 transform translate-y-2 opacity-0 ${bgColor}`;
+            toast.innerHTML = `<i class="fa-solid ${icon} text-base"></i> <span>${message}</span>`;
+            
+            container.appendChild(toast);
+
+            // Trigger animation
+            setTimeout(() => {
+                toast.classList.remove('translate-y-2', 'opacity-0');
+            }, 10);
+
+            setTimeout(() => {
+                toast.classList.add('opacity-0', 'translate-y-2');
+                setTimeout(() => toast.remove(), 300);
+            }, 3000);
+        }
+
+        // Update Overtime Cutoff Window Text based on selection
+        function updateOtRulesInfo() {
+            const cutoff = document.getElementById('cutoff-period').value;
+            const monthVal = document.getElementById('pay-month').value;
+            const infoText = document.getElementById('ot-range-text');
+
+            if (!monthVal) return;
+
+            const [year, month] = monthVal.split('-').map(Number);
+            const dateObj = new Date(year, month - 1, 1);
+
+            if (cutoff === "1") {
+                // 1st salary cut-off (1–15): OT range is 26th prev month to 10th current month
+                const prevMonthObj = new Date(year, month - 2, 1);
+                const prevMonthName = prevMonthObj.toLocaleString('default', { month: 'short' });
+                const currMonthName = dateObj.toLocaleString('default', { month: 'short' });
+                infoText.innerHTML = `<strong>1st Cut-off OT Window:</strong> Overtime dates for this period should fall between <strong>${prevMonthName} 26</strong> and <strong>${currMonthName} 10</strong>.`;
+            } else {
+                // 2nd salary cut-off (16–EOM): OT range is 11th to 25th of current month
+                const currMonthName = dateObj.toLocaleString('default', { month: 'short' });
+                infoText.innerHTML = `<strong>2nd Cut-off OT Window:</strong> Overtime dates for this period should fall between <strong>${currMonthName} 11</strong> and <strong>${currMonthName} 25</strong>.`;
+            }
+        }
+
+        // Add dynamic OT row
+        function addOtRow(date = '', startTime = '18:00', endTime = '20:00') {
+            otRowCounter++;
+            const id = otRowCounter;
+            const container = document.getElementById('ot-rows-container');
+
+            const row = document.createElement('div');
+            row.id = `ot-row-${id}`;
+            row.className = "grid grid-cols-12 gap-2 items-center bg-slate-50 p-2.5 rounded-lg border border-slate-200 text-xs";
+            row.innerHTML = `
+                <div class="col-span-4 sm:col-span-3">
+                    <label class="block text-[10px] font-semibold text-slate-400">Date</label>
+                    <input type="date" value="${date}" class="ot-date w-full border border-slate-300 rounded p-1 text-xs" onchange="calculatePayroll()">
+                </div>
+                <div class="col-span-3 sm:col-span-2">
+                    <label class="block text-[10px] font-semibold text-slate-400">Start</label>
+                    <input type="time" value="${startTime}" class="ot-start w-full border border-slate-300 rounded p-1 text-xs" onchange="calculatePayroll()">
+                </div>
+                <div class="col-span-3 sm:col-span-2">
+                    <label class="block text-[10px] font-semibold text-slate-400">End</label>
+                    <input type="time" value="${endTime}" class="ot-end w-full border border-slate-300 rounded p-1 text-xs" onchange="calculatePayroll()">
+                </div>
+                <div class="col-span-12 sm:col-span-4 flex items-center justify-between gap-1 mt-1 sm:mt-0">
+                    <div class="text-[11px]">
+                        <span class="ot-hours font-bold text-slate-700">0 hrs</span>
+                        <span class="ot-meal font-semibold text-emerald-600 block text-[10px]"></span>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <span class="ot-amount font-bold text-slate-800">₱0.00</span>
+                        <button onclick="removeRow('ot-row-${id}')" class="text-slate-400 hover:text-rose-500 p-1"><i class="fa-solid fa-trash-can"></i></button>
+                    </div>
+                </div>
+            `;
+            container.appendChild(row);
+            calculatePayroll();
+        }
+
+        // Add dynamic Income Row
+        function addIncomeRow(label = '', amount = 0) {
+            incomeRowCounter++;
+            const id = incomeRowCounter;
+            const container = document.getElementById('income-rows-container');
+
+            const row = document.createElement('div');
+            row.id = `income-row-${id}`;
+            row.className = "flex items-center gap-2 bg-slate-50 p-2 rounded-lg border border-slate-200 text-xs";
+            row.innerHTML = `
+                <input type="text" placeholder="Allowance / Bonus Name" value="${label}" class="inc-label flex-grow border border-slate-300 rounded px-2 py-1 text-xs" oninput="calculatePayroll()">
+                <div class="relative w-28">
+                    <span class="absolute left-2 top-1 text-slate-400 text-[10px]">₱</span>
+                    <input type="number" value="${amount}" min="0" step="0.01" class="inc-amount w-full border border-slate-300 rounded pl-5 pr-1 py-1 text-xs text-right font-medium" oninput="calculatePayroll()">
+                </div>
+                <button onclick="removeRow('income-row-${id}')" class="text-slate-400 hover:text-rose-500 p-1"><i class="fa-solid fa-trash-can"></i></button>
+            `;
+            container.appendChild(row);
+            calculatePayroll();
+        }
+
+        // Add dynamic Deduction Row
+        function addDeductionRow(label = '', amount = 0) {
+            deductionRowCounter++;
+            const id = deductionRowCounter;
+            const container = document.getElementById('deduction-rows-container');
+
+            const row = document.createElement('div');
+            row.id = `ded-row-${id}`;
+            row.className = "flex items-center gap-2 bg-slate-50 p-2 rounded-lg border border-slate-200 text-xs";
+            row.innerHTML = `
+                <input type="text" placeholder="Custom Deduction (e.g., Late, Loan)" value="${label}" class="custom-ded-label flex-grow border border-slate-300 rounded px-2 py-1 text-xs" oninput="calculatePayroll()">
+                <div class="relative w-28">
+                    <span class="absolute left-2 top-1 text-slate-400 text-[10px]">₱</span>
+                    <input type="number" value="${amount}" min="0" step="0.01" class="custom-ded-amount w-full border border-slate-300 rounded pl-5 pr-1 py-1 text-xs text-right font-medium" oninput="calculatePayroll()">
+                </div>
+                <button onclick="removeRow('ded-row-${id}')" class="text-slate-400 hover:text-rose-500 p-1"><i class="fa-solid fa-trash-can"></i></button>
+            `;
+            container.appendChild(row);
+            calculatePayroll();
+        }
+
+        // Add dynamic Expense Row
+        function addExpenseRow(label = '', amount = 0) {
+            expenseRowCounter++;
+            const id = expenseRowCounter;
+            const container = document.getElementById('expense-rows-container');
+            const row = document.createElement('div');
+            row.id = `expense-row-${id}`;
+            row.className = "flex items-center gap-2 bg-slate-50 p-2 rounded-lg border border-slate-200 text-xs";
+            row.innerHTML = `
+                <input type="text" placeholder="Expense Name (e.g., Transportation, Food)" value="${label}" class="expense-label flex-grow border border-slate-300 rounded px-2 py-1 text-xs" oninput="calculatePayroll()">
+                <div class="relative w-28">
+                    <span class="absolute left-2 top-1 text-slate-400 text-[10px]">₱</span>
+                    <input type="number" value="${amount}" min="0" step="0.01" class="expense-amount w-full border border-slate-300 rounded pl-5 pr-1 py-1 text-xs text-right font-medium" oninput="calculatePayroll()">
+                </div>
+                <button onclick="removeRow('expense-row-${id}')" class="text-slate-400 hover:text-rose-500 p-1"><i class="fa-solid fa-trash-can"></i></button>`;
+            container.appendChild(row);
+            calculatePayroll();
+        }
+
+        // Remove a dynamic row
+        function removeRow(rowId) {
+            const el = document.getElementById(rowId);
+            if (el) el.remove();
+            calculatePayroll();
+        }
+
+        // Main Calculation Engine
+        function calculatePayroll() {
+            const dailyRate = parseFloat(document.getElementById('daily-rate').value) || 0;
+            const daysWorked = parseFloat(document.getElementById('days-worked').value) || 0;
+
+            // Hourly rate calculation (Standard 8-hour workday)
+            const hourlyRate = dailyRate / 8;
+            document.getElementById('hourly-rate-display').textContent = fmt(hourlyRate) + ' / hr';
+
+            // 1. Base Pay
+            const basePay = dailyRate * daysWorked;
+            document.getElementById('base-pay-display').textContent = fmt(basePay);
+
+            // 2. Overtime & Meal Allowance Loop
+            let totalOtPay = 0;
+            let totalMealAllowance = 0;
+
+            const otRows = document.querySelectorAll('#ot-rows-container > div');
+            otRows.forEach(row => {
+                const startTime = row.querySelector('.ot-start').value;
+                const endTime = row.querySelector('.ot-end').value;
+                const hoursLabel = row.querySelector('.ot-hours');
+                const mealLabel = row.querySelector('.ot-meal');
+                const amountLabel = row.querySelector('.ot-amount');
+
+                if (startTime && endTime) {
+                    const [sH, sM] = startTime.split(':').map(Number);
+                    const [eH, eM] = endTime.split(':').map(Number);
+
+                    let startMinutes = sH * 60 + sM;
+                    let endMinutes = eH * 60 + eM;
+
+                    if (endMinutes < startMinutes) endMinutes += 24 * 60; // Handle midnight overlap
+
+                    const durationHrs = (endMinutes - startMinutes) / 60;
+                    const otMultiplier = 1.25; // 125% regular OT
+                    const otPay = durationHrs * hourlyRate * otMultiplier;
+
+                    // Check for Meal Allowance Trigger: Reaches or passes 8:00 PM (20:00 = 1200 mins)
+                    let getsMeal = false;
+                    if (endMinutes >= 1200) {
+                        getsMeal = true;
+                        totalMealAllowance += 30;
+                    }
+
+                    totalOtPay += otPay;
+
+                    hoursLabel.textContent = `${durationHrs.toFixed(1)} hrs`;
+                    mealLabel.textContent = getsMeal ? '+₱30 Meal Bonus' : '';
+                    amountLabel.textContent = fmt(otPay + (getsMeal ? 30 : 0));
+                } else {
+                    hoursLabel.textContent = '0 hrs';
+                    mealLabel.textContent = '';
+                    amountLabel.textContent = fmt(0);
+                }
+            });
+
+            const otAndMealTotal = totalOtPay + totalMealAllowance;
+            document.getElementById('total-ot-display').textContent = fmt(otAndMealTotal);
+
+            // 3. Other Income
+            let totalOtherIncome = 0;
+            const incomeListForPayslip = [];
+            const incRows = document.querySelectorAll('#income-rows-container > div');
+            incRows.forEach(row => {
+                const label = row.querySelector('.inc-label').value.trim() || 'Additional Pay';
+                const val = parseFloat(row.querySelector('.inc-amount').value) || 0;
+                totalOtherIncome += val;
+                if (val > 0) {
+                    incomeListForPayslip.push({ label, val });
+                }
+            });
+            document.getElementById('total-income-display').textContent = fmt(totalOtherIncome);
+
+            // Gross Pay Total
+            const grossPay = basePay + otAndMealTotal + totalOtherIncome;
+
+            // 4. Deductions
+            const sss = parseFloat(document.getElementById('ded-sss').value) || 0;
+            const philhealth = parseFloat(document.getElementById('ded-philhealth').value) || 0;
+            const pagibig = parseFloat(document.getElementById('ded-pagibig').value) || 0;
+            const tax = parseFloat(document.getElementById('ded-tax').value) || 0;
+
+            let totalCustomDeductions = 0;
+            const deductionsListForPayslip = [
+                { label: 'SSS', val: sss },
+                { label: 'PhilHealth', val: philhealth },
+                { label: 'Pag-IBIG', val: pagibig },
+                { label: 'Withholding Tax', val: tax }
+            ];
+
+            const dedRows = document.querySelectorAll('#deduction-rows-container > div');
+            dedRows.forEach(row => {
+                const label = row.querySelector('.custom-ded-label').value.trim() || 'Other Deduction';
+                const val = parseFloat(row.querySelector('.custom-ded-amount').value) || 0;
+                totalCustomDeductions += val;
+                if (val > 0) {
+                    deductionsListForPayslip.push({ label, val });
+                }
+            });
+
+            const totalDeductions = sss + philhealth + pagibig + tax + totalCustomDeductions;
+            document.getElementById('total-deductions-display').textContent = fmt(totalDeductions);
+
+            // 5. Expenses
+            let totalExpenses = 0;
+            const expensesListForPayslip = [];
+            document.querySelectorAll('#expense-rows-container > div').forEach(row => {
+                const label = row.querySelector('.expense-label').value.trim() || 'Expense';
+                const val = parseFloat(row.querySelector('.expense-amount').value) || 0;
+                totalExpenses += val;
+                if (val > 0) expensesListForPayslip.push({ label, val });
+            });
+            document.getElementById('total-expenses-display').textContent = fmt(totalExpenses);
+
+            // Net Pay = Gross Pay - Deductions - Expenses
+            const netPay = grossPay - totalDeductions - totalExpenses;
+            document.getElementById('net-pay-display').textContent = fmt(netPay);
+
+            // Title Period String
+            const monthVal = document.getElementById('pay-month').value;
+            const cutoffVal = document.getElementById('cutoff-period').value;
+            let periodFormatted = 'Selected Cut-off';
+            if (monthVal) {
+                const [y, m] = monthVal.split('-');
+                const d = new Date(y, m - 1, 1);
+                const monthName = d.toLocaleString('default', { month: 'long', year: 'numeric' });
+                periodFormatted = `${monthName} - ${cutoffVal === "1" ? "1st Cut-off (1-15)" : "2nd Cut-off (16-EOM)"}`;
+            }
+            document.getElementById('summary-period-title').textContent = periodFormatted;
+
+            // Update Payslip Preview Document
+            updatePayslipPreview({
+                empName: document.getElementById('emp-name').value || 'Employee',
+                period: periodFormatted,
+                daysWorked,
+                dailyRate,
+                basePay,
+                otPay: otAndMealTotal,
+                incomeList: incomeListForPayslip,
+                grossPay,
+                deductionsList: deductionsListForPayslip,
+                totalDeductions,
+                netPay
+            });
+        }
+
+        // Render Live Payslip Document
+        function updatePayslipPreview(data) {
+            document.getElementById('ps-emp-name').textContent = `Employee: ${data.empName}`;
+            document.getElementById('ps-period-tag').textContent = data.period;
+            document.getElementById('ps-generated-date').textContent = `Issued: ${new Date().toLocaleDateString()}`;
+            document.getElementById('ps-days').textContent = data.daysWorked;
+            document.getElementById('ps-daily-rate').textContent = data.dailyRate.toFixed(2);
+            document.getElementById('ps-base-pay').textContent = fmt(data.basePay);
+            document.getElementById('ps-ot-pay').textContent = fmt(data.otPay);
+
+            // Dynamic Income list
+            const incContainer = document.getElementById('ps-income-list');
+            incContainer.innerHTML = '';
+            data.incomeList.forEach(item => {
+                incContainer.innerHTML += `
+                    <div class="flex justify-between text-slate-600 text-xs pl-2 border-l-2 border-emerald-300">
+                        <span>${item.label}</span>
+                        <span>${fmt(item.val)}</span>
+                    </div>
+                `;
+            });
+
+            document.getElementById('ps-gross-pay').textContent = fmt(data.grossPay);
+
+            // Dynamic Deductions list
+            const dedContainer = document.getElementById('ps-deductions-list');
+            dedContainer.innerHTML = '';
+            data.deductionsList.forEach(item => {
+                if (item.val > 0) {
+                    dedContainer.innerHTML += `
+                        <div class="flex justify-between text-slate-700">
+                            <span>${item.label}</span>
+                            <span class="font-semibold text-rose-600">${fmt(item.val)}</span>
+                        </div>
+                    `;
+                }
+            });
+
+            const expContainer = document.getElementById('ps-expenses-list');
+            expContainer.innerHTML = data.expensesList && data.expensesList.length ? '<div class="text-xs font-bold text-orange-600 uppercase mb-1">Expenses</div>' + data.expensesList.map(item => `<div class="flex justify-between text-slate-700"><span>${item.label}</span><span class="font-semibold text-orange-600">${fmt(item.val)}</span></div>`).join('') : '';
+            document.getElementById('ps-total-deductions').textContent = fmt((data.totalDeductions || 0) + (data.totalExpenses || 0));
+            document.getElementById('ps-net-pay').textContent = fmt(data.netPay);
+        }
+
+        // Save or Update Payroll Record in LocalStorage
+        function saveCurrentPayroll() {
+            const empName = document.getElementById('emp-name').value.trim() || 'Unknown Employee';
+            const monthVal = document.getElementById('pay-month').value;
+            const cutoffVal = document.getElementById('cutoff-period').value;
+            const dailyRate = parseFloat(document.getElementById('daily-rate').value) || 0;
+            const daysWorked = parseFloat(document.getElementById('days-worked').value) || 0;
+
+            // Gather OT Rows Data
+            const otData = [];
+            document.querySelectorAll('#ot-rows-container > div').forEach(row => {
+                otData.push({
+                    date: row.querySelector('.ot-date').value,
+                    startTime: row.querySelector('.ot-start').value,
+                    endTime: row.querySelector('.ot-end').value
+                });
+            });
+
+            // Gather Income Rows Data
+            const incomeData = [];
+            document.querySelectorAll('#income-rows-container > div').forEach(row => {
+                incomeData.push({
+                    label: row.querySelector('.inc-label').value,
+                    amount: parseFloat(row.querySelector('.inc-amount').value) || 0
+                });
+            });
+
+            // Gather Custom Deductions
+            const customDedData = [];
+            document.querySelectorAll('#deduction-rows-container > div').forEach(row => {
+                customDedData.push({
+                    label: row.querySelector('.custom-ded-label').value,
+                    amount: parseFloat(row.querySelector('.custom-ded-amount').value) || 0
+                });
+            });
+
+            const expenseData = [];
+            document.querySelectorAll('#expense-rows-container > div').forEach(row => {
+                expenseData.push({ label: row.querySelector('.expense-label').value, amount: parseFloat(row.querySelector('.expense-amount').value) || 0 });
+            });
+
+            // Calculate current total snapshot
+            const netPayText = document.getElementById('net-pay-display').textContent;
+            const grossPayText = fmt(
+                (dailyRate * daysWorked) +
+                parseFloat(document.getElementById('total-ot-display').textContent.replace(/[^\d.]/g, '')) +
+                parseFloat(document.getElementById('total-income-display').textContent.replace(/[^\d.]/g, ''))
+            );
+            const totalDeductionsText = document.getElementById('total-deductions-display').textContent;
+            const totalExpensesText = document.getElementById('total-expenses-display').textContent;
+            const grossAmount = parseFloat(grossPayText.replace(/[^\d.]/g, '')) || 0;
+            const deductionsAmount = parseFloat(totalDeductionsText.replace(/[^\d.]/g, '')) || 0;
+            const expensesAmount = parseFloat(totalExpensesText.replace(/[^\d.]/g, '')) || 0;
+            const savedNetPayText = fmt(grossAmount - deductionsAmount - expensesAmount);
+
+            const record = {
+                id: editingRecordId ? editingRecordId : Date.now(),
+                updatedAt: new Date().toISOString(),
+                empName,
+                monthVal,
+                cutoffVal,
+                dailyRate,
+                daysWorked,
+                otData,
+                incomeData,
+                customDedData,
+                deductions: {
+                    sss: parseFloat(document.getElementById('ded-sss').value) || 0,
+                    philhealth: parseFloat(document.getElementById('ded-philhealth').value) || 0,
+                    pagibig: parseFloat(document.getElementById('ded-pagibig').value) || 0,
+                    tax: parseFloat(document.getElementById('ded-tax').value) || 0,
+                },
+                summary: {
+                    grossPayText,
+                    totalDeductionsText,
+                    totalExpensesText,
+                    netPayText: savedNetPayText
+                }
+            };
+
+            let logs = JSON.parse(localStorage.getItem('payroll_logs') || '[]');
+
+            if (editingRecordId) {
+                // Update Existing Record In Place
+                const index = logs.findIndex(r => r.id === editingRecordId);
+                if (index !== -1) {
+                    logs[index] = record;
+                    showToast(`Updated Payroll Record #${editingRecordId}!`, 'success');
+                }
+            } else {
+                // Insert New Record
+                logs.unshift(record);
+                showToast('New Payroll Record Saved Successfully!', 'success');
+            }
+
+            localStorage.setItem('payroll_logs', JSON.stringify(logs));
+            
+            // Exit Edit Mode and Refresh
+            cancelEditing();
+            renderSavedLogs();
+        }
+
+        // Load Record into Form for Editing
+        function editPayrollRecord(id) {
+            const logs = JSON.parse(localStorage.getItem('payroll_logs') || '[]');
+            const record = logs.find(r => r.id === id);
+
+            if (!record) return;
+
+            editingRecordId = record.id;
+
+            // Populate Main Fields
+            document.getElementById('emp-name').value = record.empName || '';
+            document.getElementById('pay-month').value = record.monthVal || '';
+            document.getElementById('cutoff-period').value = record.cutoffVal || '1';
+            document.getElementById('daily-rate').value = record.dailyRate || 0;
+            document.getElementById('days-worked').value = record.daysWorked || 0;
+
+            // Clear & Populate OT Rows
+            document.getElementById('ot-rows-container').innerHTML = '';
+            if (record.otData && record.otData.length > 0) {
+                record.otData.forEach(ot => addOtRow(ot.date, ot.startTime, ot.endTime));
+            }
+
+            // Clear & Populate Income Rows
+            document.getElementById('income-rows-container').innerHTML = '';
+            if (record.incomeData && record.incomeData.length > 0) {
+                record.incomeData.forEach(inc => addIncomeRow(inc.label, inc.amount));
+            }
+
+            // Populate Deductions
+            document.getElementById('ded-sss').value = record.deductions?.sss || 0;
+            document.getElementById('ded-philhealth').value = record.deductions?.philhealth || 0;
+            document.getElementById('ded-pagibig').value = record.deductions?.pagibig || 0;
+            document.getElementById('ded-tax').value = record.deductions?.tax || 0;
+
+            // Clear & Populate Custom Deductions
+            document.getElementById('deduction-rows-container').innerHTML = '';
+            if (record.customDedData && record.customDedData.length > 0) {
+                record.customDedData.forEach(d => addDeductionRow(d.label, d.amount));
+            }
+
+            document.getElementById('expense-rows-container').innerHTML = '';
+            if (record.expenseData && record.expenseData.length > 0) record.expenseData.forEach(e => addExpenseRow(e.label, e.amount));
+            else addExpenseRow();
+
+            // Update UI State / Edit Mode Banners
+            const monthText = document.getElementById('pay-month').value;
+            const banner = document.getElementById('edit-mode-banner');
+            document.getElementById('edit-mode-text').textContent = `Editing Saved Record ID #${record.id} (${record.empName} - ${monthText})`;
+            banner.classList.remove('hidden');
+
+            document.getElementById('save-btn-text').textContent = 'Update Saved Record';
+            document.getElementById('summary-save-btn').textContent = 'Update Saved Record';
+
+            // Recalculate Form & Scroll to top
+            updateOtRulesInfo();
+            calculatePayroll();
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+
+            showToast(`Loaded Record #${record.id} for editing`, 'info');
+        }
+
+        // Exit Edit Mode
+        function cancelEditing() {
+            editingRecordId = null;
+            document.getElementById('edit-mode-banner').classList.add('hidden');
+            document.getElementById('save-btn-text').textContent = 'Save Payroll Record';
+            document.getElementById('summary-save-btn').textContent = 'Save Record';
+        }
+
+        // Reset All Form Fields
+        function resetForm() {
+            cancelEditing();
+            document.getElementById('emp-name').value = 'John Doe';
+            document.getElementById('daily-rate').value = '695';
+            document.getElementById('days-worked').value = '12';
+            document.getElementById('ded-sss').value = '0';
+            document.getElementById('ded-philhealth').value = '0';
+            document.getElementById('ded-pagibig').value = '0';
+            document.getElementById('ded-tax').value = '0';
+
+            document.getElementById('ot-rows-container').innerHTML = '';
+            document.getElementById('income-rows-container').innerHTML = '';
+            document.getElementById('deduction-rows-container').innerHTML = '';
+            document.getElementById('expense-rows-container').innerHTML = '';
+
+            addOtRow();
+            addIncomeRow('Meal Allowance (Fixed)', 0);
+            addExpenseRow();
+            calculatePayroll();
+            showToast('Form reset to default values', 'info');
+        }
+
+        // Delete Log Record
+        function deleteRecord(id) {
+            let logs = JSON.parse(localStorage.getItem('payroll_logs') || '[]');
+            logs = logs.filter(r => r.id !== id);
+            localStorage.setItem('payroll_logs', JSON.stringify(logs));
+            
+            if (editingRecordId === id) {
+                cancelEditing();
+            }
+
+            renderSavedLogs();
+            showToast('Payroll record deleted', 'info');
+        }
+
+        // Format the period shown in Saved Payroll Logs & History
+        // 1st cutoff = 1-15; 2nd cutoff = 16 through the actual last day (30 or 31)
+        function formatSavedLogPeriod(monthVal, cutoffVal) {
+            if (!monthVal) return '--';
+
+            const [year, month] = monthVal.split('-').map(Number);
+            const lastDay = new Date(year, month, 0).getDate();
+
+            const monthName = new Date(year, month - 1, 1)
+                .toLocaleString('default', { month: 'short', year: 'numeric' });
+
+            return cutoffVal === '1'
+                ? `${monthName} 1 to 15 (1st Cutoff)`
+                : `${monthName} 16 to ${lastDay} (2nd Cutoff)`;
+        }
+
+        // Render Saved Logs Table
+        function renderSavedLogs() {
+            const logs = JSON.parse(localStorage.getItem('payroll_logs') || '[]');
+            const tbody = document.getElementById('payroll-logs-body');
+            document.getElementById('record-count').textContent = logs.length;
+
+            if (logs.length === 0) {
+                tbody.innerHTML = `
+                    <tr>
+                        <td colspan="7" class="text-center py-8 text-slate-400 text-xs">
+                            <i class="fa-solid fa-folder-open text-2xl mb-2 block"></i>
+                            No saved payroll records found. Click "Save Payroll Record" above to store your calculations.
+                        </td>
+                    </tr>
+                `;
+                return;
+            }
+
+            tbody.innerHTML = logs.map(rec => {
+                const isCurrentlyEditing = editingRecordId === rec.id;
+                const rowBg = isCurrentlyEditing ? 'bg-amber-50/80 border-l-4 border-amber-500' : 'hover:bg-slate-50/80';
+
+                return `
+                    <tr class="${rowBg} transition">
+                        <td class="p-3 font-medium text-slate-800">
+                            <div>${formatSavedLogPeriod(rec.monthVal, rec.cutoffVal)}</div>
+                            <div class="text-[10px] text-slate-400">ID: #${rec.id}</div>
+                        </td>
+                        <td class="p-3 text-slate-600 font-medium">${rec.empName}</td>
+                        <td class="p-3 text-slate-600">${rec.daysWorked} days</td>
+                        <td class="p-3 text-slate-600 font-semibold">${rec.summary?.grossPayText || '₱0.00'}</td>
+                        <td class="p-3 text-rose-600">${rec.summary?.totalDeductionsText || '₱0.00'}</td>
+                        <td class="p-3 font-extrabold text-brand-700">${rec.summary?.netPayText || '₱0.00'}</td>
+                        <td class="p-3 text-center">
+                            <div class="flex items-center justify-center gap-1">
+                                <button onclick="editPayrollRecord(${rec.id})" class="bg-amber-100 hover:bg-amber-200 text-amber-800 font-semibold px-2.5 py-1 rounded text-xs transition flex items-center gap-1" title="Load into form to edit">
+                                    <i class="fa-solid fa-pen-to-square"></i> Edit
+                                </button>
+                                <button onclick="editPayrollRecord(${rec.id}); setTimeout(() => window.print(), 200);" class="bg-slate-100 hover:bg-slate-200 text-slate-700 px-2 py-1 rounded text-xs transition" title="View / Print">
+                                    <i class="fa-solid fa-print"></i>
+                                </button>
+                                <button onclick="deleteRecord(${rec.id})" class="bg-rose-50 hover:bg-rose-100 text-rose-600 px-2 py-1 rounded text-xs transition" title="Delete">
+                                    <i class="fa-solid fa-trash-can"></i>
+                                </button>
+                            </div>
+                        </td>
+                    </tr>
+                `;
+            }).join('');
+        }
+    </script>
+</body>
+</html>
